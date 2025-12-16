@@ -54,7 +54,8 @@ I²C is required to communicate with the ADS1115.
 ```bash
 sudo armbian-config
 ```
-Then navigate to System → Hardware → Enable I2C
+Then navigate to System → Kernel → Overlays and activate ```meson-g12a-radxa-zero-i2c-ee-m1-gpioh-6-gpioh-7```
+and be careful to select the right one.
 And reboot after enabling.
 
 Verify after enabling by running `ls /dev/i2c-*`
