@@ -2,7 +2,7 @@
 This is the software for the upgrade of the Logitech gaming wheel formula with vibrations. 
 This software is made for Armbian (:
 
-![Logitech formula wheel with vibration feedback](/assets/logitechwheel.jpg)
+![Logitech formula wheel with vibration feedback](logitechwheel.jpg)
 
 ---
 
