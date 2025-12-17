@@ -85,83 +85,83 @@ Verify:
 `ls /dev/hidg0`
 
 <details>
+
+<summary>Instructions</summary>
 If the device is not present and you havent created the HID gadget yet. please follow these instructions.
 You need to have libcomposite available at this point.
 
   1. Enter root shell
-    - Enter the shell via ```sudo -i```
+    - Enter the shell via `sudo -i`
   2. Go to USB gadget configfs.
-    - Go to the USB gadget dir by ```cd /sys/kernel/config/usb_gadget```
+    - Go to the USB gadget dir by `cd /sys/kernel/config/usb_gadget`
   3. Create the gadget.
-    ```
+```
 mkdir wheel
 cd wheel
-    ```
+```
   4. Set device identity
-    ```
-    echo 0x1d6b > idVendor      # Linux Foundation
-    echo 0x0104 > idProduct     # HID gadget
-    echo 0x0100 > bcdDevice
-    echo 0x0200 > bcdUSB
-    ```
+```
+echo 0x1d6b > idVendor      # Linux Foundation
+echo 0x0104 > idProduct     # HID gadget
+echo 0x0100 > bcdDevice
+echo 0x0200 > bcdUSB
+```
   5. Create USB strings
-    ```
-    mkdir -p strings/0x409
-    echo "0001"        > strings/0x409/serialnumber
-    echo "Le Potato"  > strings/0x409/manufacturer
-    echo "Wheel HID"  > strings/0x409/product
-    ```
+```
+mkdir -p strings/0x409
+echo "0001"        > strings/0x409/serialnumber
+echo "Le Potato"  > strings/0x409/manufacturer
+echo "Wheel HID"  > strings/0x409/product
+```
   6. Create HID function
-    ```
-    mkdir -p functions/hid.usb0
-    echo 1 > functions/hid.usb0/protocol
-    echo 1 > functions/hid.usb0/subclass
-    echo 2 > functions/hid.usb0/report_length
-    ```
+```
+mkdir -p functions/hid.usb0
+echo 1 > functions/hid.usb0/protocol
+echo 1 > functions/hid.usb0/subclass
+echo 2 > functions/hid.usb0/report_length
+```
   7. HID Report Descriptor
-    ```
-    echo -ne \
-    '\x05\x01'\
-    '\x09\x04'\
-    '\xA1\x01'\
-    '\x09\x01'\
-    '\xA1\x00'\
-    '\x05\x01'\
-    '\x09\x31'\
-    '\x16\x01\x80'\
-    '\x26\xFF\x7F'\
-    '\x75\x10'\
-    '\x95\x01'\
-    '\x81\x02'\
-    '\xC0'\
-    '\xC0' \
-    > functions/hid.usb0/report_desc
-    ```
+```
+echo -ne \
+'\x05\x01'\
+'\x09\x04'\
+'\xA1\x01'\
+'\x09\x01'\
+'\xA1\x00'\
+'\x05\x01'\
+'\x09\x31'\
+'\x16\x01\x80'\
+'\x26\xFF\x7F'\
+'\x75\x10'\
+'\x95\x01'\
+'\x81\x02'\
+'\xC0'\
+'\xC0' \
+> functions/hid.usb0/report_desc
+```
   8. Create configuration
-    ```
-    mkdir -p configs/c.1
-    mkdir -p configs/c.1/strings/0x409
-    echo "Wheel Config" > configs/c.1/strings/0x409/configuration
-    echo 250 > configs/c.1/MaxPower
-    ```
+```
+mkdir -p configs/c.1
+mkdir -p configs/c.1/strings/0x409
+echo "Wheel Config" > configs/c.1/strings/0x409/configuration
+echo 250 > configs/c.1/MaxPower
+```
   9. Link HID function
-    ```
-    ln -s functions/hid.usb0 configs/c.1/
-    ```
+```
+ln -s functions/hid.usb0 configs/c.1/
+```
   10. Bind gadget to USB controller
     Find the controller name
-    ```
-    ls /sys/class/udc
-    ```
+
+  `ls /sys/class/udc`
     example output: fe800000.usb
-    ```
-    echo fe800000.usb > UDC
-    ```
+    
+    `echo fe800000.usb > UDC`
+
     Dont forget to change the example value (fe800000) to your value.
   11. Final step. Verify
-    ```
-    ls /dev/hidg0
-    ```
+    `ls /dev/hidg0`
+
 
 Optional permissions.
 `nano /etc/udev/rules.d/99-hidg.rules`
@@ -170,7 +170,8 @@ and enter this into the rule file.
 This will make the permission mode to '666'
 And dont forget to reload after saving file.
 `udevadm control --reload-rules`
-  
+
+---
 </details>
 
 ⚠️ Important
