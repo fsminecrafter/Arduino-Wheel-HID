@@ -250,35 +250,21 @@ USB HID Output
 #### Troubleshooting
 `/dev/i2c-1 missing`
 
-I²C not enabled
+- I²C not enabled
+- Re-check armbian-config
+- Reboot
+- `/dev/hidg0` missing
+- USB gadget not configured
+- dwc2 or libcomposite not loaded
+- HID gadget setup incomplete
+- Permission errors
+- Confirm group membership:
+  - groups
+- Re-login after usermod
 
-Re-check armbian-config
+#### Notes
 
-Reboot
-
-`/dev/hidg0` missing
-
-USB gadget not configured
-
-dwc2 or libcomposite not loaded
-
-HID gadget setup incomplete
-
-Permission errors
-
-Confirm group membership:
-
-groups
-
-
-Re-login after usermod
-
-Notes
-
-Only one axis is exposed (ideal for steering wheels)
-
-Force feedback is not implemented
-
-Designed for low latency and high resolution
-
-Safe for continuous operation
+- Only one axis is exposed (ideal for steering wheels)
+- Force feedback is not implemented
+- Designed for low latency and high resolution
+- Safe for continuous operation
