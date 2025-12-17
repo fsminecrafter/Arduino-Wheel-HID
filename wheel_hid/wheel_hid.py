@@ -13,6 +13,7 @@ from adafruit_ads1x15.analog_in import AnalogIn
 
 # ---------------- FILES ----------------
 
+CONFIG_DIR = os.path.expanduser("~/.wheel_hid")
 CONFIG_FILE = os.path.expanduser("~/.wheel_hid/config.json")
 HID_DEVICE = "/dev/hidg0"
 VENV_PY = os.path.join(CONFIG_DIR, "joystickenv", "bin", "python3")
