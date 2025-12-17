@@ -6,15 +6,12 @@ import time
 import json
 import struct
 import argparse
-import board
-import busio
-import adafruit_ads1x15.ads1115 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
+from smbus2 import SMBus
 
 # ---------------- FILES ----------------
 
 CONFIG_DIR = os.path.expanduser("~/.wheel_hid")
-CONFIG_FILE = os.path.expanduser("~/.wheel_hid/config.json")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 HID_DEVICE = "/dev/hidg0"
 VENV_PY = os.path.join(CONFIG_DIR, "joystickenv", "bin", "python3")
 
@@ -32,6 +29,10 @@ DEFAULT_MAX = 32767
 DEFAULT_CENTER = 16384
 SMOOTHING = 0.2
 UPDATE_DELAY = 0.002
+
+I2C_BUS = 1
+REG_CONV = 0x00
+REG_CFG  = 0x01
 
 # ----------------------------------------
 
@@ -82,12 +83,31 @@ def load_from_config(cfg):
     except Exception:
         return None
 
+# ---------- ADS1115 (SMBus) ----------
+
+def read_ads1115(bus, addr):
+    # Single-shot, AIN0, gain=2/3, 860 SPS
+    bus.write_i2c_block_data(
+        addr,
+        REG_CFG,
+        [0xC3, 0x83]
+    )
+    time.sleep(0.002)
+
+    data = bus.read_i2c_block_data(addr, REG_CONV, 2)
+    value = (data[0] << 8) | data[1]
+    if value & 0x8000:
+        value -= 65536
+    return value
+
+# ----------------------------------------
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--auto", action="store_true",
                         help="Automatically load saved config and start")
     parser.add_argument("--test", action="store_true",
-                        help="Print raw ADC value every 250ms and exit with Ctrl+C")
+                        help="Print raw ADC value every 250ms and exit")
     args = parser.parse_args()
 
     # ---------- CONFIG SELECTION ----------
@@ -118,7 +138,6 @@ def main():
             else:
                 print("No config found.")
                 cfg = get_defaults()
-
         else:
             if ask_yn("OK use default values?"):
                 print("Ok using default values")
@@ -137,28 +156,25 @@ def main():
     print(f" Max     : {adc_max}")
     print(f" Center  : {adc_center}\n")
 
-    # ---------- ADC SETUP ----------
-    i2c = busio.I2C(board.SCL, board.SDA)
-    ads = ADS.ADS1115(i2c, address=address)
-    ads.gain = 2 / 3
-    chan = AnalogIn(ads, ADS.P0)
+    bus = SMBus(I2C_BUS)
 
+    # ---------- TEST MODE ----------
     if args.test:
         print("TEST MODE: Printing raw ADC values (Ctrl+C to exit)\n")
         try:
             while True:
-                print(f"ADC raw value: {chan.value}")
+                print(f"ADC raw value: {read_ads1115(bus, address)}")
                 time.sleep(0.25)
         except KeyboardInterrupt:
             print("\nExited test mode.")
             sys.exit(0)
-    
+
     # ---------- HID LOOP ----------
     with open(HID_DEVICE, "wb", buffering=0) as hid:
         last = 0.0
 
         while True:
-            raw = clamp(chan.value, adc_min, adc_max)
+            raw = clamp(read_ads1115(bus, address), adc_min, adc_max)
 
             if raw >= adc_center:
                 mapped = map_range(raw, adc_center, adc_max, 0, 32767)
