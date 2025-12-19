@@ -1,273 +1,156 @@
-# Logitech-Wheel-upgrader
-This is the software for the upgrade of the Logitech gaming wheel formula with vibrations. 
-This software is made for Armbian (:
+Arduino-Wheel-HID
+=================
 
-#### ⚠️ This software is ONLY supported on Armbian with the Le potato (AML-S905X-CC), testing with other devices are probably not natively working.
+This project allows you to turn a **potentiometer-based analog wheel** into a **USB HID gaming wheel** using an **Arduino UNO**, sending data to a PC for games to recognize.
 
-![Logitech formula wheel with vibration feedback](logitechwheel.jpg)
-
----
-
-This project upgrades an analog steering wheel (potentiometer-based) by using a **Le Potato** SBC as a **USB HID gaming wheel**, providing **high-resolution input** via an **ADS1115 16-bit ADC**.
-
-The Le Potato reads the wheel position over **I²C** and exposes it to a PC as a **USB HID joystick axis** using Linux USB gadget mode.
-
----
-
-## Hardware Requirements
-
-- Le Potato (AML-S905X-CC)
-- ADS1115 16-bit ADC (I²C)
-- Potentiometer (steering wheel)
-- USB micro-B cable (Le Potato → PC)
-- PC with USB host port
-
----
-
-## Software Requirements
-
-- Armbian (recommended)
-- Python 3
-- Internet access (for dependency installation)
-
----
-
-## How It Works
-
-1. The potentiometer is connected to the ADS1115.
-2. The ADS1115 is read over I²C.
-3. The ADC value is mapped to a single joystick axis (Y axis).
-4. The Le Potato presents itself as a **USB HID game controller**.
-5. Games see the device as a steering wheel axis.
-
----
-
-## Pre-Setup Checklist (IMPORTANT)
-
-Before running any scripts, **all steps below must be completed**.
-
----
-
-## 1. Enable I²C (Required for ADC)
-
-I²C is required to communicate with the ADS1115.
-
-### Enable I²C
-```bash
-sudo armbian-config
-```
-Then navigate to System → Kernel → Overlays and activate ```meson-g12a-radxa-zero-i2c-ee-m1-gpioh-6-gpioh-7```
-and be careful to select the right one.
-And reboot after enabling.
-
-Verify after enabling by running `ls /dev/i2c-*`
-and the expected output is `/dev/i2c-1`.
-Required Kernel Modules
-
----
-
-#### The following kernel modules must be available:
-
-- libcomposite
-
-Verify:
-
-lsmod | grep -E "libcomposite"
-
-#### HID Gadget Device
-
-A USB HID gadget must be configured so this device file exists:
-
-`/dev/hidg0`
-
-Verify:
-
-`ls /dev/hidg0`
-
-<details>
-
-<summary>Instructions</summary>
-If the device is not present and you havent created the HID gadget yet. please follow these instructions.
-You need to have libcomposite available at this point.
-
-  1. Enter root shell
-    - Enter the shell via `sudo -i`
-  2. Go to USB gadget configfs.
-    - Go to the USB gadget dir by `cd /sys/kernel/config/usb_gadget`
-  3. Create the gadget.
-```
-mkdir wheel
-cd wheel
-```
-  4. Set device identity
-```
-echo 0x1d6b > idVendor      # Linux Foundation
-echo 0x0104 > idProduct     # HID gadget
-echo 0x0100 > bcdDevice
-echo 0x0200 > bcdUSB
-```
-  5. Create USB strings
-```
-mkdir -p strings/0x409
-echo "0001"        > strings/0x409/serialnumber
-echo "Le Potato"  > strings/0x409/manufacturer
-echo "Wheel HID"  > strings/0x409/product
-```
-  6. Create HID function
-```
-mkdir -p functions/hid.usb0
-echo 1 > functions/hid.usb0/protocol
-echo 1 > functions/hid.usb0/subclass
-echo 2 > functions/hid.usb0/report_length
-```
-  7. HID Report Descriptor
-```
-echo -ne \
-'\x05\x01'\
-'\x09\x04'\
-'\xA1\x01'\
-'\x09\x01'\
-'\xA1\x00'\
-'\x05\x01'\
-'\x09\x31'\
-'\x16\x01\x80'\
-'\x26\xFF\x7F'\
-'\x75\x10'\
-'\x95\x01'\
-'\x81\x02'\
-'\xC0'\
-'\xC0' \
-> functions/hid.usb0/report_desc
-```
-  8. Create configuration
-```
-mkdir -p configs/c.1
-mkdir -p configs/c.1/strings/0x409
-echo "Wheel Config" > configs/c.1/strings/0x409/configuration
-echo 250 > configs/c.1/MaxPower
-```
-  9. Link HID function
-```
-ln -s functions/hid.usb0 configs/c.1/
-```
-  10. Bind gadget to USB controller
-    Find the controller name
-
-  `ls /sys/class/udc`
-    example output: fe800000.usb
-    
-    `echo fe800000.usb > UDC`
-
-    Dont forget to change the example value (fe800000) to your value.
-  11. Final step. Verify
-    `ls /dev/hidg0`
-
-
-Optional permissions.
-`nano /etc/udev/rules.d/99-hidg.rules`
-and enter this into the rule file.
-`KERNEL=="hidg0", MODE="0666"`
-This will make the permission mode to '666'
-And dont forget to reload after saving file.
-`udevadm control --reload-rules`
-
----
-</details>
+It works cross-platform on **Windows** (vJoy) and **Linux** (uinput) and supports automatic pairing, connection monitoring, and smoothed 16-bit input.
 
 ⚠️ Important
-This project assumes `/dev/hidg0` already exists.
-The setup script does not create the USB gadget automatically.
+------------
 
-3. User Permissions
+This project is designed for **Arduino UNO**. Other boards may work but require modifications.
 
-Run all scripts as a normal user, not root.
+Hardware Requirements
+---------------------
 
-I²C Access
-`sudo usermod -aG i2c $USER`
+*   Arduino UNO (or compatible)
+    
+*   ADS1115 16-bit ADC (I²C)
+    
+*   Potentiometer (steering wheel)
+    
+*   USB cable (Arduino → PC)
+    
+*   PC with USB host
+    
 
+Software Requirements
+---------------------
 
-Log out and log back in.
+*   Python 3
+    
+*   pyserial
+    
+*   pyvjoy (Windows) or python-uinput (Linux)
+    
+*   Internet access for dependencies
+    
 
-HID Gadget Access (Temporary)
-`sudo chmod 666 /dev/hidg0`
+How It Works
+------------
 
+1.  Potentiometer connects to ADS1115.
+    
+2.  Arduino reads ADS1115 over I²C.
+    
+3.  Arduino maps raw ADC value to a 16-bit axis.
+    
+4.  Arduino sends data over **serial** to the PC.
+    
+5.  PC receives data and exposes it as a **joystick axis**:
+    
+    *   Windows → vJoy
+        
+    *   Linux → uinput
+        
+6.  Games detect this as a steering wheel axis.
+    
 
-For permanent access, use a udev rule.
+Features
+--------
 
-4. Install & Run Setup Script
+*   Automatic pairing with PC via **pairing code**.
+    
+*   Connection monitoring: returns to pairing if serial is lost.
+    
+*   Smoothed, high-resolution 16-bit axis.
+    
+*   Fast updates (~100Hz).
+    
+*   Works on Windows and Linux without modifying the Arduino hardware.
+    
+*   Single axis (ideal for steering wheel projects).
+    
 
-The setup script:
+Setup Instructions
+------------------
 
-- Installs dependencies
-- Detects the ADS1115
-- Calibrates the wheel
-- Saves configuration
+### 1\. Connect Hardware
 
-Run setup
-`python3 setup_wheel_hid.py`
+*   ADS1115 → Arduino (I²C)
+    
+*   Potentiometer → ADS1115 channel A0
+    
+*   Ensure proper power and ground connections.
+    
 
+### 2\. Upload Arduino Sketch
 
-If system-wide pip installation fails:
-A virtual environment named joystickenv is created automatically
+*   Use Arduino IDE to upload wheel\_hid.ino.
+    
+*   Ensure serial monitor is closed when running the PC script.
+    
 
-- Dependencies are installed there
+### 3\. Install Dependencies on PC
 
-- Runtime scripts will use it automatically
+`   pip3 install pyserial  # Windows only:  pip3 install pyvjoy  # Linux only:  pip3 install python-uinput   `
 
-Configuration File Location
+### 4\. Run Python HID Script
 
-`~/.wheel_hid/config.json?`
+#### Automatic mode (recommended)
 
+Uses saved configuration and starts immediately:
 
-The config file includes:
+`   python3 wheel_hid_pc.py --auto   `
 
-- I²C address
+#### Manual mode
 
-- Calibration values (min / max / center)
+Allows interactive pairing and calibration:
 
-#### Running the Wheel HID
-Automatic mode (recommended)
+`   python3 wheel_hid_pc.py   `
 
-Uses saved configuration and starts immediately.
+### 5\. Pairing
 
-`python3 wheel_hid.py --auto`
+*   Arduino sends a **pairing request** on serial.
+    
+*   PC must respond with the **pairing code**.
+    
+*   Once paired, data will stream automatically.
+    
+*   If the connection is lost, PC re-enters pairing mode.
+    
 
-Manual mode
+### 6\. Axis Mapping & Smoothing
 
-Allows interactive configuration selection.
+*   Raw ADC values are dynamically mapped to -32767..32767.
+    
+*   Smoothed output reduces jitter.
+    
+*   Mapped value is sent to vJoy or uinput axis for gaming.
+    
 
-`python3 wheel_hid.py`
+Troubleshooting
+---------------
 
-USB HID Output
+*   Serial connection errors → check cable and port.
+    
+*   Invalid values → check potentiometer wiring.
+    
+*   Windows vJoy errors → ensure vJoy driver is installed and configured.
+    
+*   Linux uinput errors → ensure user has permission (sudo modprobe uinput and group membership).
+    
+*   Arduino sketch not responding → power-cycle Arduino.
+    
 
-- Device appears as a USB game controller
+### Notes
 
-- Single axis: Y axis
-
-- 16-bit resolution
-
-- Smoothed and centered output
-
-- Games will detect this as a steering input.
-
-#### Troubleshooting
-`/dev/i2c-1 missing`
-
-- I²C not enabled
-- Re-check armbian-config
-- Reboot
-- `/dev/hidg0` missing
-- USB gadget not configured
-- dwc2 or libcomposite not loaded
-- HID gadget setup incomplete
-- Permission errors
-- Confirm group membership:
-  - groups
-- Re-login after usermod
-
-#### Notes
-
-- Only one axis is exposed (ideal for steering wheels)
-- Force feedback is not implemented
-- Designed for low latency and high resolution
-- Safe for continuous operation
+*   Only one axis exposed (steering wheel).
+    
+*   High resolution for smooth input.
+    
+*   Low latency.
+    
+*   Force feedback not implemented.
+    
+*   Safe for continuous use.
