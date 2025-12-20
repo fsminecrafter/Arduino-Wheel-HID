@@ -1,136 +1,133 @@
-#!/usr/bin/env python3
-import sys
-import time
 import serial
+import time
+import sys
 import argparse
-import platform
 
-# Platform-dependent libraries
-if platform.system() == "Windows":
-    import pyvjoy
-else:
-    import uinput
+def cleanString(string):
+    string = str(string)
+    string = string[2:]
+    string = string[:-5]
+    return str(string)
 
-# ------------------------
-# Argument parsing
-# ------------------------
-parser = argparse.ArgumentParser(description="Wheel HID PC Receiver")
-parser.add_argument("--debug", action="store_true", help="Show axis percentages and debug info")
-parser.add_argument("--auto", action="store_true", help="Automatically pair and start")
-parser.add_argument("--port", type=str, default=None, help="Serial port (e.g. COM3 or /dev/ttyUSB0)")
-args = parser.parse_args()
+def getpaircode(string):
+    string = str(string)
+    string = string[18:]
+    string = string[:-5]
+    return string
 
-DEBUG = args.debug
+def printcleanoutput():
+    print(cleanString(ser.readline()))
 
-# ------------------------
-# Axis Settings
-# ------------------------
-AXES_CONFIG = {
-    "A": {"name": "A_axis", "centred": True},
-    "B": {"name": "B_axis", "centred": False},
-}
+def valueToPercent(value: int) -> float:
+    if value < -32767 or value > 32767:
+        raise ValueError("Value out of range (-32767 .. 32767)")
 
-SMOOTHING = 0.2
-smoothed = {axis: 0.0 for axis in AXES_CONFIG}
+    return (value / 32767.0) * 100.0
 
-# ------------------------
-# Mapping functions
-# ------------------------
-def map_to_percent(value, min_val, max_val, centred=True):
-    if max_val == min_val:
-        return 0.0
-    pct = (value - min_val) / (max_val - min_val)
-    if centred:
-        return pct * 2.0 - 1.0  # -1 to 1
-    return pct  # 0 to 1
+def remakevalue(value):
+    int(value)
+    return max(-32767, min(16383, value))
 
-def apply_smoothing(old, new):
-    return old * SMOOTHING + new * (1.0 - SMOOTHING)
-
-# ------------------------
-# Serial & Pairing
-# ------------------------
-SERIAL_BAUD = 115200
-PAIRING_CODE = "FSMINEWHEEL123"  # Can be randomized
-serial_port = None
-
-def connect_serial(port=None):
-    import serial.tools.list_ports
-    if port:
-        return serial.Serial(port, SERIAL_BAUD, timeout=0.1)
-    # Auto-detect
-    ports = list(serial.tools.list_ports.comports())
-    for p in ports:
-        try:
-            s = serial.Serial(p.device, SERIAL_BAUD, timeout=0.1)
-            return s
-        except:
-            continue
-    raise RuntimeError("No serial port found")
-
-def perform_pairing(ser):
-    print("Pairing request sent. Waiting for response...")
-    ser.write(f"PAIR:{PAIRING_CODE}\n".encode())
-    t0 = time.time()
-    while True:
-        if ser.in_waiting:
-            line = ser.readline().decode().strip()
-            if line == f"PAIR_OK:{PAIRING_CODE}":
-                print("Pairing successful!")
-                return True
-        if time.time() - t0 > 10:
-            print("Pairing timeout. Retry.")
-            return False
-
-# ------------------------
-# HID Setup
-# ------------------------
-if platform.system() == "Windows":
-    j = pyvjoy.VJoyDevice(1)
-else:
-    device = uinput.Device([uinput.ABS_X + (0, 32767, 0, 0)])
-
-# ------------------------
-# Main Loop
-# ------------------------
-def main():
-    global smoothed
-    while True:
-        try:
-            ser = connect_serial(args.port)
-            if not args.auto:
-                if not perform_pairing(ser):
-                    time.sleep(2)
-                    continue
-            print("Receiving data...")
-            min_val = 0
-            max_val = 65535
-            while True:
-                line = ser.readline().decode().strip()
-                if not line:
-                    continue
-                try:
-                    value = int(line)
-                except:
-                    continue
-                # Map & smooth
-                for axis_key, axis_cfg in AXES_CONFIG.items():
-                    pct = map_to_percent(value, min_val, max_val, axis_cfg["centred"])
-                    smoothed[axis_key] = apply_smoothing(smoothed[axis_key], pct)
-                    # Send to HID
-                    scaled = int((smoothed[axis_key]+1)/2*32767) if axis_cfg["centred"] else int(smoothed[axis_key]*32767)
-                    if platform.system() == "Windows":
-                        j.set_axis(pyvjoy.HID_USAGE_X, scaled)
-                    else:
-                        device.emit(uinput.ABS_X, scaled, syn=True)
-                    if DEBUG:
-                        print(f"{axis_cfg['name']}: {smoothed[axis_key]*100:.2f}%")
-        except KeyboardInterrupt:
-            print("Exiting...")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(1)
 
 if __name__ == "__main__":
-    main()
+    arguments = argparse.ArgumentParser()
+    arguments.add_argument("--port", help="Specifies which port to use")
+    arguments.add_argument("-d", "--debug", help="Outputs the incoming text from the arduino")
+    args = arguments.parse_args()
+
+    if args.port:
+        port = str(args.port)
+        print(f"Now using port: {port}")
+    else:
+        port = '/dev/ttyUSB0'
+
+    if args.debug:
+        with serial.Serial(port, 115200, timeout=10, rtscts=0, stopbits=1, bytesize=8) as ser:
+            ser.setDTR(False)
+            ser.setRTS(False)
+            time.sleep(1)
+            print(ser.name)
+            print(cleanString(ser.readline()))
+            time.sleep(5)
+            code = str(ser.readline())
+            code = getpaircode(code)
+            print(f"Paircode found! {code}")
+            ser.write(b"PAIRING_OK\r\n")
+            while True:
+                line = ser.readline().decode("utf-8", errors="ignore").strip()
+
+                if not line:
+                    continue
+
+                try:
+                    value = int(line)
+                    print(valueToPercent(value))
+                except ValueError:
+                    print(f"Ignored non-numeric input: {line}")
+
+
+    try:
+        with serial.Serial(port, 115200, timeout=10, rtscts=0, stopbits=1, bytesize=8) as ser:
+            ser.setDTR(False)
+            ser.setRTS(False)
+            print(f"Using: {sys.platform}")
+            osplatform = sys.platform
+            time.sleep(1)
+            print(ser.name)
+            print(cleanString(ser.readline()))
+            time.sleep(5)
+            code = str(ser.readline())
+            code = getpaircode(code)
+            print(f"Paircode found! {code}")
+            ser.write(b"PAIRING_OK\r\n")
+            print("Pairing Handshake done.")
+            print("Calibration...")
+            print("Turn the POT or WHEEL to absolute MAX")
+            time.sleep(5)
+            print("Turn the POT or WHEEl to minimium")
+            time.sleep(5)
+            print("Printing output.")
+            for i in range(100):
+                line = ser.readline().decode("utf-8", errors="ignore").strip()
+
+                if not line:
+                    continue
+
+                try:
+                    value = int(line)
+                    print(valueToPercent(value))
+                except ValueError:
+                    print(f"Ignored non-numeric input: {line}")
+
+
+            print("If the output was not correct restart the script.")
+            time.sleep(4)
+            if osplatform == "linux" or osplatform == "Linux":
+                print("Starting linux virtual wheel")
+                import uinput
+                device = uinput.Device([
+                    uinput.ABS_Y + (-32768, 32767, 0, 0)
+                ], name="WheelDriver v1.0")
+                print("Virtual wheel started.")
+                time.sleep(3)
+                while True:
+                    line = ser.readline().decode("utf-8", errors="ignore").strip()
+                    value = int(line)
+                    device.emit(uinput.ABS_Y, value, syn=True)
+            elif osplatform == "windows" or osplatform == "Windows":
+                print("Starting windows virtual wheel")
+                import pyvjoy
+                wheel = pyvjoy.VJoyDevice(1)
+                print("Virtual wheel started.")
+                time.wait(3)
+                while True:
+                    line = ser.readline().decode("utf-8", errors="ignore").strip()
+                    value = int(line)    
+                    wheelvalue = remakevalue(value)  
+                    wheel.set_axis(pyvjoy.HID_USAGE_Y, wheelvalue)              
+            
+    except Exception as e:
+        print(f"ERROR: {e}")
+        ser.close()
+        sys.exit(666)
+        
