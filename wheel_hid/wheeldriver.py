@@ -24,9 +24,16 @@ def valueToPercent(value: int) -> float:
 
     return (value / 32767.0) * 100.0
 
-def remakevalue(value):
-    int(value)
-    return max(-32767, min(16383, value))
+def remakevalue(v: int) -> int:
+    # clamp input
+    if v < -32767:
+        v = -32767
+    if v > 32767:
+        v = 32767
+
+    # map -32767..32767 → 0..32768
+    return int((v + 32767) * 32768 / 65534)
+
 
 
 if __name__ == "__main__":
@@ -39,7 +46,7 @@ if __name__ == "__main__":
         port = str(args.port)
         print(f"Now using port: {port}")
     else:
-        port = '/dev/ttyUSB0'
+        port = 'COM4'  # Default port for Windows
 
     if args.debug:
         with serial.Serial(port, 115200, timeout=10, rtscts=0, stopbits=1, bytesize=8) as ser:
@@ -114,17 +121,52 @@ if __name__ == "__main__":
                     line = ser.readline().decode("utf-8", errors="ignore").strip()
                     value = int(line)
                     device.emit(uinput.ABS_Y, value, syn=True)
-            elif osplatform == "windows" or osplatform == "Windows":
-                print("Starting windows virtual wheel")
-                import pyvjoy
-                wheel = pyvjoy.VJoyDevice(1)
+            elif osplatform in ("win32", "Windows"):
+                print("Starting windows virtual wheel (pyvjoystick)")
+                from pyvjoystick import vjoy
+
+                try:
+                    wheel = vjoy.VJoyDevice(1)
+                    wheel.reset()
+                except Exception as e:
+                    print("Failed to open vJoy device:", e)
+                    sys.exit(1)
+
                 print("Virtual wheel started.")
-                time.wait(3)
+                time.sleep(2)
+
                 while True:
-                    line = ser.readline().decode("utf-8", errors="ignore").strip()
-                    value = int(line)    
-                    wheelvalue = remakevalue(value)  
-                    wheel.set_axis(pyvjoy.HID_USAGE_Y, wheelvalue)              
+                    try:
+                        raw = ser.readline()
+                        if not raw:
+                            continue
+
+                        line = raw.decode("utf-8", errors="ignore").strip()
+
+                        # Skip non-numeric lines
+                        if not line.lstrip("-").isdigit():
+                            if args.debug:
+                                print("IGNORED:", line)
+                            continue
+
+                        value = int(line)
+
+                        # Map -32767..32767 → 0..32767
+                        wheelvalue = remakevalue(value)
+                        
+                        if wheelvalue < 0:
+                            wheelvalue = 0
+                        elif wheelvalue > 0x8000:
+                            wheelvalue = 0x8000
+
+                        wheel.set_axis(vjoy.HID_USAGE.Y, wheelvalue)
+
+                        print(f"RAW={value}  VJOY={wheelvalue}")
+
+                    except Exception as e:
+                        print("ERROR:", e)
+                        time.sleep(0.1)
+
             
     except Exception as e:
         print(f"ERROR: {e}")
