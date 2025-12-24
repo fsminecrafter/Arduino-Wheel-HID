@@ -17,12 +17,6 @@
 
 bool paired = false;
 
-int16_t observedMin = 32767;
-int16_t observedMax = -32768;
-
-float smoothing = 0.2f;
-float smoothedValue = 0.0f;
-
 unsigned long lastPairSend = 0;
 unsigned long lastStream = 0;
 
@@ -65,24 +59,12 @@ bool readADS1115(int16_t &value) {
   return readConversion(value);
 }
 
-/* ---------------- MAPPING ---------------- */
-
-int16_t mapToFullRange(int16_t raw) {
-  if (raw < observedMin) observedMin = raw;
-  if (raw > observedMax) observedMax = raw;
-
-  if (observedMax == observedMin) return 0;
-
-  return (int32_t)(raw - observedMin) * 65534L /
-         (observedMax - observedMin) - 32767L;
-}
-
 /* ---------------- SERIAL HANDLING ---------------- */
 
 void handleSerial() {
   while (Serial.available()) {
     char c = Serial.read();
-      
+
     if (c == '\n' || c == '\r') {
       rxBuf[rxPos] = 0;
 
@@ -108,8 +90,7 @@ void handleSerial() {
 void setup() {
   Serial.begin(SERIAL_BAUD);
   Wire.begin();
-
-  delay(300); // USB settle (UNO safe)
+  delay(300); // USB settle
 
   Serial.println("BOOT_OK");
 }
@@ -128,7 +109,7 @@ void loop() {
 
   if (!paired) return;
 
-  /* Stream ADC */
+  /* Stream RAW ADC */
   if (millis() - lastStream >= STREAM_INTERVAL) {
     lastStream = millis();
 
@@ -138,10 +119,6 @@ void loop() {
       return;
     }
 
-    int16_t scaled = mapToFullRange(raw);
-    smoothedValue = smoothedValue * smoothing +
-                    scaled * (1.0f - smoothing);
-
-    Serial.println((int)smoothedValue);
+    Serial.println(raw);
   }
 }
