@@ -61,8 +61,6 @@ Features
 
 *   Automatic pairing with PC via **pairing code**.
     
-*   Connection monitoring: returns to pairing if serial is lost.
-    
 *   Smoothed, high-resolution 16-bit axis.
     
 *   Fast updates (~100Hz).
