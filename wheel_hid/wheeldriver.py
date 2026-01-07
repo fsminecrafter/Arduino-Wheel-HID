@@ -3,10 +3,16 @@ import time
 import sys
 import argparse
 
-# -------- USER OFFSET (RAW UNITS) --------
+# -------- USER CONFIG --------
 # Positive = shift right, Negative = shift left
 USER_OFFSET = 0
+# Minimum and maximum values from the wheel or potentiometer, RAW values
+MAX_VALUE = 20580
+MIN_VALUE = -3300
+SMOOTHING = 0.2  # 0.0 -> no smoothing very jittery, 0.7 -> Smooth but more ineritia, 1.0 -> no change at all
+# -----------------------------
 
+previousValues = []
 
 def cleanString(string):
     string = str(string)
@@ -19,6 +25,31 @@ def getpaircode(string):
     string = string[18:]
     string = string[:-5]
     return string
+
+def to_int16_range(value, min_value, max_value):
+    if max_value == min_value:
+        raise ValueError("min_value and max_value cannot be the same")
+
+    # Normalize to 0.0–1.0
+    normalized = (value - min_value) / (max_value - min_value)
+
+    # Scale to -32767–32767
+    scaled = normalized * 65534 - 32767
+
+    # Clamp and convert to int
+    return int(max(-32767, min(32767, round(scaled))))
+
+def smooth_value(previous, current, smoothing):
+    """
+    previous  : last smoothed value
+    current   : new raw value
+    smoothing : 0.0 → no smoothing, 1.0 → no change at all
+    """
+    if not 0.0 <= smoothing <= 1.0:
+        raise ValueError("smoothing must be between 0.0 and 1.0")
+
+    return previous + (current - previous) * (1.0 - smoothing)
+
 
 def printcleanoutput():
     print(cleanString(ser.readline()))
@@ -156,9 +187,14 @@ if __name__ == "__main__":
 
                         value = int(line)
 
+                        # Convert to int16 range based on calibration
+                        value = to_int16_range(value, MIN_VALUE, MAX_VALUE)
                         # Apply user offset
                         value += USER_OFFSET
-
+                        # Apply smoothing
+                        previousValues.append(value)
+                        if len(previousValues) > 5:
+                            value = smooth_value(previousValues[-2], value, SMOOTHING)
                         # Clamp to int16 range
                         if value < -32767:
                             value = -32767
@@ -167,8 +203,7 @@ if __name__ == "__main__":
 
                         # Map -32767..32767 → 0..32768
                         wheelvalue = remakevalue(value)
-
-                        
+                        # Clamp to vJoy range
                         if wheelvalue < 0:
                             wheelvalue = 0
                         elif wheelvalue > 0x8000:
